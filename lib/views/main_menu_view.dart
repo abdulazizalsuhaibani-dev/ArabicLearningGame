@@ -16,7 +16,8 @@ class MyApp extends StatelessWidget {
         fontFamily: 'NotoKufi',
         primarySwatch: Constants.primary,
         scaffoldBackgroundColor: Constants.FORTH_COLOR,
-        dialogBackgroundColor: Constants.THIRD_COLOR,
+        dialogTheme:
+            const DialogThemeData(backgroundColor: Constants.THIRD_COLOR),
         textTheme: Theme.of(context).textTheme.apply(
             bodyColor: Colors.black87,
             displayColor: Colors.black87,
