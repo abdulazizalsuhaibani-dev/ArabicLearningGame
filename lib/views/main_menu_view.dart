@@ -13,6 +13,8 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Flutter Demo',
       theme: ThemeData(
+        // The UI was designed for Material 2 (colored app bars, filled buttons).
+        useMaterial3: false,
         fontFamily: 'NotoKufi',
         primarySwatch: Constants.primary,
         scaffoldBackgroundColor: Constants.FORTH_COLOR,
