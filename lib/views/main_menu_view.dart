@@ -10,20 +10,22 @@ class MyApp extends StatelessWidget {
   // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
+    final baseTheme = ThemeData(
+      // The UI was designed for Material 2 (colored app bars, filled buttons).
+      useMaterial3: false,
+      fontFamily: 'NotoKufi',
+      primarySwatch: Constants.primary,
+      scaffoldBackgroundColor: Constants.FORTH_COLOR,
+      dialogTheme: const DialogThemeData(backgroundColor: Constants.THIRD_COLOR),
+    );
     return MaterialApp(
       title: 'Flutter Demo',
-      theme: ThemeData(
-        // The UI was designed for Material 2 (colored app bars, filled buttons).
-        useMaterial3: false,
-        fontFamily: 'NotoKufi',
-        primarySwatch: Constants.primary,
-        scaffoldBackgroundColor: Constants.FORTH_COLOR,
-        dialogTheme:
-            const DialogThemeData(backgroundColor: Constants.THIRD_COLOR),
-        textTheme: Theme.of(context).textTheme.apply(
-            bodyColor: Colors.black87,
-            displayColor: Colors.black87,
-            fontFamily: 'NotoKufi'),
+      // Derive the text theme from the M2 base, not Theme.of(context): above
+      // MaterialApp that is the fallback theme, whose M3 line heights squeeze
+      // the Arabic glyphs.
+      theme: baseTheme.copyWith(
+        textTheme: baseTheme.textTheme
+            .apply(bodyColor: Colors.black87, displayColor: Colors.black87),
       ),
       home: const MyHomePage(title: 'Flutter Demo Home Page'),
     );
