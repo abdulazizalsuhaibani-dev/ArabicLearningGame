@@ -33,7 +33,7 @@ Tests must not touch the global `databaseService` (it is only initialized in `ma
 
 Both are reset by the settings screen (`settings_dialog.dart`). `lib/shared_preferences.dart` (`Helper`) is an unused wrapper; views access SharedPreferences directly.
 
-**Level logic (`lib/views/level_view.dart`)** — Question type is selected by `leveltype` (1–9, currently hard-coded), with `isMcq` choosing between multiple-choice (`setPossibleMultipleChoicesAnswers`, types 1/3/5/7) and true/false (`setPossibleTrueFalseAnswers`, types 2/4/6/8/9) answer generation. Answering 5 questions correctly (`questionCount >= 4`) completes the level.
+**Level logic (`lib/views/level_view.dart`)** — `LevelView` takes `world` and `level` (1–3). Question type is selected by `leveltype` (1–9), picked per question by `pickQuestionType` from the per-level table `levelQuestionTypes` in `lib/classes/level_config.dart`; only types 1/3/7/8 are listed there (2/4/5/6/9 aren't ready — see the comment in that file). `isMcq` (derived from `mcqQuestionTypes`) chooses between multiple-choice (`setPossibleMultipleChoicesAnswers`, types 1/3/5/7) and true/false (`setPossibleTrueFalseAnswers`, types 2/4/6/8/9) answer generation. Answering 5 questions correctly (`questionCount >= 4`) completes the level.
 
 **Styling** — Shared colors and `MaterialColor` swatches are in `lib/classes/constants.dart`, imported as `Constants`. The app theme (in `MyApp`) deliberately uses Material 2 (`useMaterial3: false`); its text theme must be derived from that M2 base theme, not `Theme.of(context)`, or M3 line heights leak in and squeeze the Arabic glyphs (covered by a test in `test/widget_test.dart`).
 

@@ -160,7 +160,10 @@ class _LevelButtonState extends State<LevelButton> {
                   Navigator.pushReplacement(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => LevelView(),
+                      builder: (context) => LevelView(
+                        world: widget.worldNum,
+                        level: widget.levelNum ~/ 10,
+                      ),
                     ),
                   );
                 }

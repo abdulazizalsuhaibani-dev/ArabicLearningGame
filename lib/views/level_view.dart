@@ -1,6 +1,7 @@
 import 'package:arabic_learning_game/views/worlds_view.dart';
 import 'package:flutter/material.dart';
 import 'package:arabic_learning_game/classes/answers_generator.dart';
+import 'package:arabic_learning_game/classes/level_config.dart';
 import 'dart:math';
 import 'package:flutter/scheduler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -8,7 +9,9 @@ import 'package:arabic_learning_game/classes/constants.dart' as Constants;
 
 // Level Menu
 class LevelView extends StatefulWidget {
-  const LevelView({super.key});
+  final int world;
+  final int level;
+  const LevelView({super.key, required this.world, required this.level});
 
   @override
   State<LevelView> createState() => _LevelViewState();
@@ -17,8 +20,8 @@ class LevelView extends StatefulWidget {
 class _LevelViewState extends State<LevelView> {
   int questionCount = 0;
   List<CheckIcon> checkIcons = [];
-  int leveltype = 8;
-  bool isMcq = false;
+  late int leveltype;
+  bool get isMcq => mcqQuestionTypes.contains(leveltype);
   String? randChar;
   int worldCount = 0, numberOffails = 0, cyberCount = 0;
   final String question1 = 'كم عدد النقاط في الصورة؟';
@@ -46,6 +49,7 @@ class _LevelViewState extends State<LevelView> {
   @override
   void initState() {
     super.initState();
+    leveltype = pickQuestionType(widget.world, widget.level);
     _loadWorldCount();
     _loadCyberCount();
     print(worldCount);
@@ -139,6 +143,7 @@ class _LevelViewState extends State<LevelView> {
           ElevatedButton(
               onPressed: () {
                 questionCount++;
+                leveltype = pickQuestionType(widget.world, widget.level);
                 checkIcons.add(CheckIcon());
                 print(questionCount);
                 setState(() {});
@@ -391,10 +396,9 @@ class _LevelViewState extends State<LevelView> {
     // convert the correct answer to intger
     int correctAnswerNum = int.parse(correctAnswer);
     possibleAnswers.add(Answer(correctAnswer, true));
-    //here we check if the correct answer equal to one so we can avoid 0 or nigative numbers in the answers
-    if (correctAnswerNum == 1 ||
-        correctAnswerNum ==
-            2) //then make random answers equal to near the correct answer
+    //here we check if the correct answer is 0, 1 or 2 so we can avoid nigative numbers in the answers
+    if (correctAnswerNum <=
+        2) //then make random answers equal to near the correct answer
     {
       ans2 = correctAnswerNum + 1;
       possibleAnswers.add(Answer(ans2.toString(), false));
@@ -414,7 +418,7 @@ class _LevelViewState extends State<LevelView> {
       ans3 = correctAnswerNum - 1;
       possibleAnswers.add(Answer(ans3.toString(), false));
 
-      if (Random().nextInt(1) == 0) {
+      if (Random().nextInt(2) == 0) {
         ans4 = ans2 + 1;
         possibleAnswers.add(Answer(ans4.toString(), false));
       } else {
@@ -477,7 +481,7 @@ class _LevelViewState extends State<LevelView> {
     return Scaffold(
         appBar: AppBar(
           title: Text(
-            ('مرحلة 1 - سؤال ${questionCount + 1}'),
+            ('مرحلة ${widget.level} - سؤال ${questionCount + 1}'),
             style: TextStyle(fontSize: 30, color: Constants.TEXT_COLOR),
           ),
           centerTitle: true,
