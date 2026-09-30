@@ -1,182 +1,168 @@
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:arabic_learning_game/views/level_view.dart';
-import 'package:arabic_learning_game/classes/constants.dart' as Constants;
+import 'package:arabic_learning_game/classes/answers_generator.dart';
+import 'package:arabic_learning_game/classes/constants.dart' as constants;
+import 'package:arabic_learning_game/shared_preferences.dart';
 
-// Worlds menu view
 class WorldsView extends StatefulWidget {
-  const WorldsView({super.key});
-
+  final Future<CaptchaImage> Function()? loadImage;
+  const WorldsView({super.key, this.loadImage});
   @override
   State<WorldsView> createState() => _WorldsViewState();
 }
 
 class _WorldsViewState extends State<WorldsView> {
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-        appBar: AppBar(
-          title: Text(
-            'قائمة العوالم',
-            style: TextStyle(
-                color: Constants.TEXT_COLOR,
-                fontFamily: 'Notokufi',
-                fontSize: 30),
-          ),
-          centerTitle: true,
-        ),
-        body: SafeArea(
-          child: Center(
-              child: Column(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: <Widget>[
-              WorldContainer(
-                text: 'العالم الأول',
-                worldNum: 1,
-              ),
-              WorldContainer(
-                text: 'العالم الثاني',
-                worldNum: 2,
-              ),
-              WorldContainer(
-                text: 'العالم الثالث',
-                worldNum: 3,
-              ),
-            ],
-          )),
-        ));
-  }
-}
-
-class WorldContainer extends StatefulWidget {
-  final int worldNum;
-  final String text;
-  const WorldContainer({Key? key, this.worldNum = 0, this.text = 'null'})
-      : super(key: key);
-
-  @override
-  _WorldContainerState createState() => _WorldContainerState();
-}
-
-class _WorldContainerState extends State<WorldContainer> {
-  bool _isEnabled = false;
-  TextStyle _textStyle = TextStyle(
-      fontSize: 27, color: Constants.TEXT_COLOR, fontFamily: 'Notokufi');
-  BoxDecoration _containerDecoration = BoxDecoration(
-    color: Constants.THIRD_COLOR,
-    borderRadius: BorderRadius.circular(10.0),
-  );
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: _containerDecoration,
-      child: Column(
-        children: [
-          Text(
-            widget.text,
-            style: _textStyle,
-          ),
-          Center(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                LevelButton(
-                  levelNum: 10,
-                  worldNum: widget.worldNum,
-                ),
-                LevelButton(
-                  levelNum: 20,
-                  worldNum: widget.worldNum,
-                ),
-                LevelButton(
-                  levelNum: 30,
-                  worldNum: widget.worldNum,
-                )
-              ],
-            ),
-          )
-        ],
-      ),
-    );
-  }
-}
-
-class LevelButton extends StatefulWidget {
-  final int levelNum;
-  final int worldNum;
-  const LevelButton({Key? key, this.levelNum = 0, this.worldNum = 0})
-      : super(key: key);
-
-  @override
-  _LevelButtonState createState() => _LevelButtonState();
-}
-
-class _LevelButtonState extends State<LevelButton> {
-  int _buttonState = 0;
-  bool _isActive = false;
-  int worldCount = 0;
+  GameProgress? _progress;
+  bool _failed = false;
+  bool _openingLevel = false;
+  static const _advice = [
+    'لا تنشر صورك عبر برامج التواصل الاجتماعي',
+    'لا ترسل بيانات البطاقة البنكية لأي شخص',
+    'لا تزود أي شخص بمعلوماتك الخاصة أو عناوين اتصالك',
+    'لا تفتح أي مرفق في البريد الإلكتروني إلا إذا كان المرسل معروفاً لديك',
+    'لا تستجب لأي رسالة أو طلب إذا لم تفهم معناها وأخبر والديك عنها مباشرة',
+    'اختر كلمات مرور قوية ولا تشاركها مع أحد مطلقاً',
+    'في حال تعرضك للتنمر أخبر والديك فوراً',
+    'لا تنشر الشائعات فقد تؤذي غيرك',
+    'لا تفتح الروابط غير المعروفة إلا بعد أن تتأكد من صحتها',
+  ];
 
   @override
   void initState() {
     super.initState();
-    _loadWorldCount();
+    _loadProgress();
   }
 
-  void _loadWorldCount() async {
-    final prefs = await SharedPreferences.getInstance();
-    worldCount = (prefs.getInt('worldCount') ?? 0);
-    if (worldCount % 100 == widget.levelNum &&
-        worldCount ~/ 100 == widget.worldNum) {
-      _buttonState = 1;
-      _isActive = true;
-    } else if (worldCount ~/ 100 > widget.worldNum) {
-      _isActive = true;
-      _buttonState = 2;
-    } else if (worldCount % 100 > widget.levelNum &&
-        worldCount ~/ 100 >= widget.worldNum) {
-      _isActive = true;
-      _buttonState = 2;
+  Future<void> _loadProgress() async {
+    try {
+      final progress = await GameProgress.load();
+      if (!mounted) return;
+      setState(() {
+        _progress = progress;
+        _failed = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _failed = true);
     }
-    setState(() {});
   }
 
-  dynamic getColors() {
-    switch (_buttonState) {
-      case 1:
-        return Constants.SECOND_COLOR;
-      case 2:
-        return Colors.yellow.shade300;
+  Future<void> _openLevel(int code) async {
+    if (_openingLevel) return;
+    setState(() => _openingLevel = true);
+    try {
+      final tip = await Navigator.push<int>(
+        context,
+        MaterialPageRoute(
+          builder: (_) =>
+              LevelView(levelCode: code, loadImage: widget.loadImage),
+        ),
+      );
+      if (!mounted) return;
+      await _loadProgress();
+      if (!mounted || tip == null || tip < 0 || tip >= _advice.length) return;
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(
+            _progress!.isComplete ? 'مبروك! أكملت جميع العوالم' : 'نصيحة',
+          ),
+          content: Text(_advice[tip], textDirection: TextDirection.rtl),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('إغلاق'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _openingLevel = false);
     }
-    return Colors.grey;
   }
 
   @override
   Widget build(BuildContext context) {
-    return ElevatedButton(
-        onPressed: _isActive
-            ? () {
-                if (_buttonState == 1) {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => LevelView(),
-                    ),
-                  );
-                }
-              }
-            : null,
-        style: ElevatedButton.styleFrom(
-            backgroundColor: getColors(), fixedSize: Size(40, 40)),
-        child: _buttonState == 2
-            ? Icon(
-                Icons.done,
-                color: Constants.TEXT_COLOR,
+    final progress = _progress;
+    return Scaffold(
+      appBar: AppBar(title: const Text('قائمة العوالم'), centerTitle: true),
+      body: SafeArea(
+        child: _failed
+            ? Center(
+                child: ElevatedButton(
+                  onPressed: _loadProgress,
+                  child: const Text('إعادة المحاولة'),
+                ),
               )
-            : Text(
-                '${widget.levelNum ~/ 10}',
-                style: TextStyle(
-                    color: Constants.TEXT_COLOR, fontFamily: 'Notokufi'),
-              ));
+            : progress == null
+            ? const Center(child: CircularProgressIndicator())
+            : ListView(
+                padding: const EdgeInsets.all(20),
+                children: [
+                  if (progress.isComplete)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 20),
+                      child: Text(
+                        'أحسنت! أكملت جميع المراحل.',
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  for (var world = 1; world <= 3; world++)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 24),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: constants.THIRD_COLOR,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Column(
+                        children: [
+                          Text(
+                            [
+                              'العالم الأول',
+                              'العالم الثاني',
+                              'العالم الثالث',
+                            ][world - 1],
+                            style: const TextStyle(fontSize: 27),
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              for (var level = 1; level <= 3; level++)
+                                ElevatedButton(
+                                  onPressed:
+                                      !_openingLevel &&
+                                          progress.worldCount ==
+                                              world * 100 + level * 10
+                                      ? () =>
+                                            _openLevel(world * 100 + level * 10)
+                                      : null,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: constants.SECOND_COLOR,
+                                    disabledBackgroundColor:
+                                        progress.worldCount >
+                                            world * 100 + level * 10
+                                        ? Colors.yellow.shade300
+                                        : Colors.grey.shade300,
+                                    minimumSize: const Size(64, 48),
+                                  ),
+                                  child:
+                                      progress.worldCount >
+                                          world * 100 + level * 10
+                                      ? const Icon(
+                                          Icons.done,
+                                          color: Colors.black87,
+                                        )
+                                      : Text('$level'),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+      ),
+    );
   }
 }
