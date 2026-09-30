@@ -1,55 +1,63 @@
-import 'package:arabic_learning_game/main.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:arabic_learning_game/shared_preferences.dart';
 
 class SettingsDialog extends StatefulWidget {
+  const SettingsDialog({super.key});
   @override
-  SettingsDialogState createState() => new SettingsDialogState();
+  State<SettingsDialog> createState() => _SettingsDialogState();
 }
 
-class SettingsDialogState extends State<SettingsDialog> {
-  void resetGame() async {
-    final prefs = await SharedPreferences.getInstance();
-    prefs.setInt('worldCount', 110);
-    prefs.setInt('cyberCount', -1);
+class _SettingsDialogState extends State<SettingsDialog> {
+  bool _resetting = false;
+
+  Future<void> _resetGame() async {
+    if (_resetting) return;
+    setState(() => _resetting = true);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('إعادة اللعبة؟'),
+        content: const Text(
+          'سيتم مسح التقدم والعودة إلى المرحلة الأولى.',
+          textDirection: TextDirection.rtl,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('إلغاء'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('إعادة التعيين'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (confirmed == true) {
+      try {
+        await GameProgress.reset();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('تمت إعادة اللعبة.')));
+      } catch (_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تعذرت إعادة اللعبة. حاول مرة أخرى.')),
+        );
+      }
+    }
+    if (mounted) setState(() => _resetting = false);
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-        backgroundColor: Color(0xFFD4ECEC),
-        appBar: AppBar(
-          title: const Text(
-            'خيارات',
-            style: TextStyle(fontSize: 30),
-          ),
-          actions: [
-            ElevatedButton(
-                onPressed: () {
-                  //TODO: Handle save
-                },
-                child: Text(
-                  'حفظ',
-                )),
-          ],
-        ),
-        body: Center(
-            child: Column(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            ElevatedButton(
-              child: Text('إعادة اللعبة'),
-              onPressed: (() {
-                resetGame();
-              }),
-            ),
-            ElevatedButton(
-              child: Text('مسح الصور المحددة'),
-              onPressed: (() {
-                databaseService.deleteSelectedImages();
-              }),
-            )
-          ],
-        )));
-  }
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('خيارات')),
+    body: Center(
+      child: ElevatedButton(
+        onPressed: _resetting ? null : _resetGame,
+        child: const Text('إعادة اللعبة'),
+      ),
+    ),
+  );
 }

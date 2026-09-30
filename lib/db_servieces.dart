@@ -1,89 +1,37 @@
-import 'dart:async';
-import 'package:flutter/foundation.dart';
+import 'dart:io';
+
+import 'package:flutter/services.dart';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
-import 'package:flutter/services.dart';
-import 'dart:io';
-import 'dart:typed_data';
-import 'dart:math';
+import 'package:arabic_learning_game/classes/answers_generator.dart';
 
 class DatabaseService {
-  late Database captcha_db;
-
-  String dbName = 'game_db.db';
+  late Database captchaDb;
+  final String dbName = 'game_db.db';
   bool databaseCreated = false;
-  DatabaseService();
 
   Future<void> prepareDatabases() async {
-    if (!databaseCreated) {
-      await openBD(dbName);
+    if (databaseCreated) return;
+    final dbPath = join(await getDatabasesPath(), dbName);
+    if (!await databaseExists(dbPath)) {
+      final data = await rootBundle.load('db/$dbName');
+      final file = File(dbPath);
+      await file.create(recursive: true);
+      await file.writeAsBytes(
+        data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+        flush: true,
+      );
     }
+    captchaDb = await openDatabase(dbPath);
     databaseCreated = true;
   }
 
-  Future<void> clearOldDB(String databaseName) async {
-    String dbpath = join(await getDatabasesPath(), databaseName);
-    var exists = await databaseExists(dbpath);
-    if (exists) {
-      // Delete the existing database
-      await deleteDatabase(dbpath);
-    }
-  }
-
-  Future<void> openBD(String databaseName) async {
-    String dbpath = join(await getDatabasesPath(), databaseName);
-
-    var exists = await databaseExists(dbpath);
-    if (!exists) {
-      // Create the writable database file from the bundled database file:
-      ByteData data = await rootBundle.load('db/' + databaseName);
-      List<int> bytes =
-          data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
-      try {
-        File file = File(dbpath);
-        await file.create(recursive: true);
-        if (await file.exists()) {
-          await file.writeAsBytes(bytes, flush: true);
-        } else {
-          print('database file not created');
-        }
-      } catch (e) {
-        print('error caught: $e');
-      }
-    }
-    captcha_db = await openDatabase(dbpath);
-    print('CAPTCHA database loaded');
-  }
-
-  Future<String> getDBPath() async {
-    return await getDatabasesPath();
-  }
-
-  Future<String> getUserDBPath() async {
-    return join(await getDatabasesPath(), dbName);
-  }
-
-  Future<String> getZippedDBPath() async {
-    return '';
-  }
-
-  Future<List<Map<String, dynamic>>> getImageInfo(int id) async {
-    String dbQuery = 'select * from images where image_id = $id';
-    List<Map<String, dynamic>> content = await captcha_db.rawQuery(dbQuery);
-    return content;
-  }
-
-  Future<Map<String, dynamic>> getRandomImage() async {
-    String imagesQuery = 'select * from images';
-    List<Map<String, dynamic>> imagesContent =
-        await captcha_db.rawQuery(imagesQuery);
-    Map<String, dynamic> imageContent =
-        imagesContent[Random().nextInt(imagesContent.length - 1)];
-    return imageContent;
-  }
-
-  Future<void> deleteSelectedImages() async {
-    String dbQuery = 'delete from selectedImages';
-    int content = await captcha_db.rawDelete(dbQuery);
+  Future<CaptchaImage> getRandomImage() async {
+    // LIMIT 1 includes every row and avoids loading the whole database.
+    final rows = await captchaDb.rawQuery(
+      'SELECT * FROM images ORDER BY RANDOM() LIMIT 1',
+    );
+    if (rows.isEmpty) throw StateError('No CAPTCHA images in database');
+    return CaptchaImage.fromRow(rows.single);
   }
 }

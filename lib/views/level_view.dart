@@ -1,593 +1,226 @@
-import 'package:arabic_learning_game/views/worlds_view.dart';
 import 'package:flutter/material.dart';
 import 'package:arabic_learning_game/classes/answers_generator.dart';
-import 'dart:math';
-import 'package:flutter/scheduler.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:arabic_learning_game/classes/constants.dart' as Constants;
 
-// Level Menu
+import 'dart:ui' as ui;
+
+import 'package:arabic_learning_game/classes/constants.dart' as constants;
+import 'package:arabic_learning_game/main.dart';
+import 'package:arabic_learning_game/shared_preferences.dart';
+
 class LevelView extends StatefulWidget {
-  const LevelView({super.key});
+  final int levelCode;
+  final Future<CaptchaImage> Function()? loadImage;
+  const LevelView({super.key, required this.levelCode, this.loadImage});
 
   @override
   State<LevelView> createState() => _LevelViewState();
 }
 
 class _LevelViewState extends State<LevelView> {
-  int questionCount = 0;
-  List<CheckIcon> checkIcons = [];
-  int leveltype = 8;
-  bool isMcq = false;
-  String? randChar;
-  int worldCount = 0, numberOffails = 0, cyberCount = 0;
-  final String question1 = 'كم عدد النقاط في الصورة؟';
-  final String question2 = 'هل توجد اي نقطة بالصورة؟'; //
-  final String question3 = 'كم عدد الاحرف بالصورة؟';
-  String question4 =
-      'هل الاحرف بالصورة (يساوي - اكبر من - اصغر من)(رقم) بالصورة؟'; //
-  String question5 = '';
-  String question6 = 'هل يوجد حرف (يتم اختيار حرف عشوائي)؟'; //
-  final String question7 = 'كم عدد حروف المد؟';
-  final String question8 = ' هل يوجد حرف مد؟'; //
-  final String question9 = 'هل الأحرف متصلة أو منفصلة؟'; //
-  final List<String> cyberAdvice = [
-    'لا تنشر صورك عبر برامج التواصل الإجتماعي',
-    'لا ترسل بيانات البطاقة البنكية لأي شخص',
-    'لا تزود أي شخص معلوماتك الخاصة أو عناوين اتصال',
-    'لا تفتح أي مرفق في البريد الإلكتروني إلا إذا كان المرسل معروف لديك',
-    'لا تستجيب لأي رسالة أو طلب إذا لم تفهم معناها وأخبر والديك عنها مباشرة',
-    'اختر كلمات مرور قوية ولاتشاركها مع أحد مطلقاً',
-    'في حال تعرضك للتنمر أخبر والديك فوراً',
-    'لا تنشر الشائعات قد تؤذي غيرك',
-    'لا تفتح الروابط غير المعروفة إلا بعد أن تتأكد من صحتها',
-    'حدِّث برامج تصفح الإنترنت واطلب المساعدة من والديك لتحديثها'
-  ];
+  GameQuestion? _question;
+  bool _loading = true;
+  bool _loadFailed = false;
+  bool _answering = false;
+  int _correctCount = 0;
+
   @override
   void initState() {
     super.initState();
-    _loadWorldCount();
-    _loadCyberCount();
-    print(worldCount);
-    SchedulerBinding.instance.addPostFrameCallback((_) async {
-      await _loadData();
-      setState(() {});
-    });
+    _loadQuestion();
   }
 
-  _loadData() {
-    CaptchaImage imageEntry = CaptchaImage();
-    Future<List<Answer>> answers = isMcq
-        ? setPossibleMultipleChoicesAnswers()
-        : setPossibleTrueFalseAnswers();
-  }
-
-  void _loadWorldCount() async {
-    final prefs = await SharedPreferences.getInstance();
+  Future<void> _loadQuestion() async {
     setState(() {
-      worldCount = (prefs.getInt('worldCount') ?? 110);
+      _loading = true;
+      _loadFailed = false;
     });
-  }
-
-  void _loadCyberCount() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      cyberCount = (prefs.getInt('cyberCount') ?? 0);
-    });
-  }
-
-  void _incrementLevel() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      worldCount = (prefs.getInt('worldCount') ?? 0) + 10;
-
-      if (worldCount % 100 == 40) {
-        worldCount += 70;
+    try {
+      final image =
+          await (widget.loadImage ?? databaseService.getRandomImage)();
+      if (!mounted) return;
+      final data = await DefaultAssetBundle.of(context)
+          .load('assets/images/${image.image}');
+      final codec = await ui.instantiateImageCodec(
+        data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+      );
+      try {
+        final frame = await codec.getNextFrame();
+        frame.image.dispose();
+      } finally {
+        codec.dispose();
       }
-      prefs.setInt('worldCount', worldCount);
-    });
-  }
-
-  void _incrementCyberCount() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      cyberCount = (prefs.getInt('cyberCount') ?? 0) + 1;
-      prefs.setInt('cyberCount', cyberCount);
-    });
-  }
-
-  void showDialogs(bool? isCorrect) {
-    List<Widget> actions;
-    if (isCorrect == true) {
-      if (questionCount >= 4) {
-        actions = [
-          Icon(
-            Icons.emoji_emotions_outlined,
-            color: Colors.yellowAccent,
-            size: 100,
-          ),
-          Text(
-            "!مبروك\nلقد تجاوزت المرحلة!",
-            style: TextStyle(fontSize: 20),
-          ),
-          ElevatedButton(
-              onPressed: () {
-                _incrementLevel();
-                _incrementCyberCount();
-                Navigator.of(context).pop();
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => WorldsView(),
-                  ),
-                );
-                showCyberAdvice();
-              },
-              child: Text("إغلاق"))
-        ];
-      } else {
-        actions = [
-          Icon(
-            Icons.check,
-            color: Colors.green,
-            size: 175,
-          ),
-          Text(
-            "! أحسنت",
-            style: TextStyle(fontSize: 30),
-          ),
-          ElevatedButton(
-              onPressed: () {
-                questionCount++;
-                checkIcons.add(CheckIcon());
-                print(questionCount);
-                setState(() {});
-                Navigator.of(context).pop();
-              },
-              child: Text("السؤال التالي"))
-        ];
-      }
-    } else {
-      actions = [
-        Icon(
-          Icons.cancel,
-          color: Colors.red,
-          size: 100,
-        ),
-        Text(
-          "إجابة خاطئة!",
-          style: TextStyle(fontSize: 20),
-        ),
-        ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              numberOffails++;
-            },
-            child: Text("إغلاق"))
-      ];
+      final type = GameProgress.levelCodes.indexOf(widget.levelCode) + 1;
+      final question = GameQuestion.generate(image, type);
+      if (!mounted) return;
+      setState(() {
+        _question = question;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loadFailed = true;
+        _loading = false;
+      });
     }
-    showDialog(
-        context: context,
-        builder: (BuildContext context) {
-          return Dialog(
-            child: Container(
-              height: 300,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: actions,
-              ),
-            ),
-          );
-        });
   }
 
-  void showCyberAdvice() {
-    showDialog(
-        context: context,
-        builder: (BuildContext context) {
-          return Dialog(
-            child: Container(
-              height: 300,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'نصيحة',
-                    style: TextStyle(fontSize: 30),
-                  ),
-                  Text(
-                    cyberAdvice[cyberCount],
-                    style: TextStyle(fontSize: 20),
-                  )
-                ],
-              ),
-            ),
-          );
-        });
-  }
-
-  Widget decideQuestionType() {
-    return isMcq
-        ? FutureBuilder(
-            future: setPossibleMultipleChoicesAnswers(),
-            builder:
-                (BuildContext context, AsyncSnapshot<List<Answer>> snapshot) {
-              if (snapshot.hasData) {
-                // data is available, display it
-                return Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        Flexible(
-                            child: ElevatedButton(
-                          child: Text('${snapshot.data![0].answer}'),
-                          onPressed: () {
-                            showDialogs(snapshot.data![0].isCorrect);
-                          },
-                        )),
-                        Flexible(
-                            child: ElevatedButton(
-                          child: Text('${snapshot.data![1].answer}'),
-                          onPressed: () {
-                            showDialogs(snapshot.data![1].isCorrect);
-                          },
-                        ))
-                      ],
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        Flexible(
-                            child: ElevatedButton(
-                          child: Text('${snapshot.data![2].answer}'),
-                          onPressed: () {
-                            showDialogs(snapshot.data![2].isCorrect);
-                          },
-                        )),
-                        Flexible(
-                            child: ElevatedButton(
-                          child: Text('${snapshot.data![3].answer}'),
-                          onPressed: () {
-                            showDialogs(snapshot.data![3].isCorrect);
-                          },
-                        ))
-                      ],
-                    )
-                  ],
-                );
-              } else if (snapshot.hasError) {
-                // an error occurred while fetching the data, display an error message
-                return Text('Error: ${snapshot.error}');
-              } else {
-                // data is not yet available, display a loading indicator
-                return CircularProgressIndicator();
-              }
-            })
-        : // build true and false answers
-        FutureBuilder(
-            future: setPossibleTrueFalseAnswers(),
-            builder:
-                (BuildContext context, AsyncSnapshot<List<Answer>> snapshot) {
-              if (snapshot.hasData) {
-                // data is available, display it
-                return Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        Flexible(
-                            child: ElevatedButton(
-                          child: Text(
-                            '${snapshot.data![0].answer}',
-                            style: TextStyle(color: Constants.TEXT_COLOR),
-                          ),
-                          onPressed: () {
-                            showDialogs(snapshot.data![0].isCorrect);
-                          },
-                        )),
-                        Flexible(
-                            child: ElevatedButton(
-                          child: Text(
-                            '${snapshot.data![1].answer}',
-                            style: TextStyle(color: Constants.TEXT_COLOR),
-                          ),
-                          onPressed: () {
-                            showDialogs(snapshot.data![1].isCorrect);
-                          },
-                        ))
-                      ],
-                    ),
-                  ],
-                );
-              } else if (snapshot.hasError) {
-                // an error occurred while fetching the data, display an error message
-                return Text('Error: ${snapshot.error}');
-              } else {
-                // data is not yet available, display a loading indicator
-                return CircularProgressIndicator();
-              }
-            });
-  }
-
-  String getQuestion() {
-    switch (leveltype) {
-      case 1:
-        return question1;
-      case 2:
-        return question2;
-      case 3:
-        return question3;
-      case 4:
-        return question4;
-      case 5:
-        return question5;
-      case 6:
-        return question6;
-      case 7:
-        return question7;
-      case 8:
-        return question8;
-      case 9:
-        return question9;
-    }
-    return '';
-  }
-
-  String getRandomCharacter() {
-    List<String> arLetters = [
-      'ا',
-      'ب',
-      'ت',
-      'ث',
-      'ج',
-      'ح',
-      'خ',
-      'د',
-      'ذ',
-      'ر',
-      'ز',
-      'س',
-      'ش',
-      'ص',
-      'ض',
-      'ط',
-      'ظ',
-      'ع',
-      'غ',
-      'ف',
-      'ق',
-      'ك',
-      'ل',
-      'م',
-      'ن',
-      'ه',
-      'و',
-      'ي'
-    ];
-    return arLetters[Random().nextInt(27)];
-  }
-
-  Future<List<Answer>> setPossibleMultipleChoicesAnswers() async {
-    String correctAnswer = '';
-    int ans2 = 0, ans3 = 0, ans4 = 0;
-    List<Answer> possibleAnswers = [];
-    switch (leveltype) {
-      case 1:
-        correctAnswer = await CaptchaImage.getNumberOfPoints();
-        break;
-      case 3:
-        correctAnswer = await CaptchaImage.getWord();
-        correctAnswer = correctAnswer.length.toString();
-        break;
-      case 5:
-        String word = await CaptchaImage.getWord();
-        randChar = word[Random().nextInt(word.length - 1)];
-        correctAnswer = word.indexOf(randChar!).toString();
-        break;
-      case 7:
-        correctAnswer = await CaptchaImage.getNumberOfMdLetters();
-    }
-    // convert the correct answer to intger
-    int correctAnswerNum = int.parse(correctAnswer);
-    possibleAnswers.add(Answer(correctAnswer, true));
-    //here we check if the correct answer equal to one so we can avoid 0 or nigative numbers in the answers
-    if (correctAnswerNum == 1 ||
-        correctAnswerNum ==
-            2) //then make random answers equal to near the correct answer
-    {
-      ans2 = correctAnswerNum + 1;
-      possibleAnswers.add(Answer(ans2.toString(), false));
-      ans3 = ans2 + 1;
-      possibleAnswers.add(Answer(ans3.toString(), false));
-
-      if (correctAnswerNum == 2) {
-        ans4 = correctAnswerNum - 1;
-        possibleAnswers.add(Answer(ans4.toString(), false));
-      } else {
-        ans4 = ans3 + 1;
-        possibleAnswers.add(Answer(ans4.toString(), false));
-      }
-    } else {
-      ans2 = correctAnswerNum + 1;
-      possibleAnswers.add(Answer(ans2.toString(), false));
-      ans3 = correctAnswerNum - 1;
-      possibleAnswers.add(Answer(ans3.toString(), false));
-
-      if (Random().nextInt(1) == 0) {
-        ans4 = ans2 + 1;
-        possibleAnswers.add(Answer(ans4.toString(), false));
-      } else {
-        ans4 = ans3 - 1;
-        possibleAnswers.add(Answer(ans4.toString(), false));
-      }
-    }
-    possibleAnswers.shuffle();
-    return possibleAnswers;
-  }
-
-  Future<List<Answer>> setPossibleTrueFalseAnswers() async {
-    String answer = '';
-    bool value = false;
-    List<Answer> possibleAnswers = [];
-    switch (leveltype) {
-      case 2:
-        answer = await CaptchaImage.getNumberOfPoints();
-        value = answer != '0';
-        break;
-      case 4:
-        //correctAnswer = await CaptchaImage.getWord();
-        //correctAnswer = correctAnswer.length.toString();
-        break;
-      case 6:
-        String word = await CaptchaImage.getWord();
-        randChar = getRandomCharacter();
-        value = word.contains(randChar!);
-        break;
-      case 8:
-        answer = await CaptchaImage.getNumberOfMdLetters();
-        value = answer != '0';
-        break;
-      case 9:
-        answer = await CaptchaImage.getIsConnected();
-        value = answer != 'منفصلة';
-    }
-    if (value) {
-      possibleAnswers.add(Answer('خطأ', false));
-      possibleAnswers.add(Answer('صح', true));
-    } else {
-      possibleAnswers.add(Answer('خطأ', true));
-      possibleAnswers.add(Answer('صح', false));
-    }
-    return possibleAnswers;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    CaptchaImage imageEntry = CaptchaImage();
-    Future<List<Answer>> answers = isMcq
-        ? setPossibleMultipleChoicesAnswers()
-        : setPossibleTrueFalseAnswers();
-    final ButtonStyle buttonStyle = ElevatedButton.styleFrom(
-        backgroundColor: Color(0xFF40B4B7),
-        textStyle: const TextStyle(fontSize: 40),
-        fixedSize: Size(224, 77));
-    randChar = getRandomCharacter();
-    String question5 = 'ما ترتيب الحرف $randChar ؟';
-    return Scaffold(
-        appBar: AppBar(
+  Future<void> _answer(Answer answer) async {
+    if (_answering || _loading) return;
+    setState(() => _answering = true);
+    final finishing = answer.isCorrect && _correctCount == 4;
+    final proceed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => PopScope(
+        canPop: false,
+        child: AlertDialog(
           title: Text(
-            ('مرحلة 1 - سؤال ${questionCount + 1}'),
-            style: TextStyle(fontSize: 30, color: Constants.TEXT_COLOR),
+            answer.isCorrect
+                ? (finishing ? 'مبروك! لقد تجاوزت المرحلة!' : 'أحسنت!')
+                : 'إجابة خاطئة!',
           ),
-          centerTitle: true,
+          content: Icon(
+            answer.isCorrect ? Icons.check_circle : Icons.cancel,
+            size: 80,
+            color: answer.isCorrect ? Colors.green : Colors.red,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(
+                answer.isCorrect
+                    ? (finishing ? 'إكمال المرحلة' : 'السؤال التالي')
+                    : 'حاول مرة أخرى',
+              ),
+            ),
+          ],
         ),
-        body: SafeArea(
-            child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              Text(
-                '${getQuestion()}',
-                style: TextStyle(fontSize: 32),
-              ),
-              Container(
-                  child: FutureBuilder(
-                      future: CaptchaImage.getImageData(),
-                      builder: (BuildContext context,
-                          AsyncSnapshot<String> snapshot) {
-                        if (snapshot.hasData) {
-                          // data is available, display it
-                          return Image.asset('assets/images/${snapshot.data!}');
-                        } else if (snapshot.hasError) {
-                          // an error occurred while fetching the data, display an error message
-                          return Text('Error: ${snapshot.error}');
-                        } else {
-                          // data is not yet available, display a loading indicator
-                          return CircularProgressIndicator();
-                        }
-                      })),
-              Container(child: decideQuestionType()),
-              Container(
-                child: Column(
-                  children: [
-                    Row(
-                        mainAxisAlignment: MainAxisAlignment.start,
-                        children: checkIcons),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        QuestionContainer(
-                          qNum: 1,
-                        ),
-                        QuestionContainer(
-                          qNum: 2,
-                        ),
-                        QuestionContainer(
-                          qNum: 3,
-                        ),
-                        QuestionContainer(
-                          qNum: 4,
-                        ),
-                        QuestionContainer(
-                          qNum: 5,
-                        ),
-                      ],
-                    )
-                  ],
-                ),
-              ),
-            ],
-          ),
-        )));
-  }
-}
-
-class QuestionContainer extends StatelessWidget {
-  final int qNum;
-  const QuestionContainer({super.key, this.qNum = 0});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            ' ${qNum} ',
-            style: TextStyle(fontSize: 30),
-          ),
-          Icon(Icons.done)
-        ],
-      ),
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.blueAccent, width: 2.0),
       ),
     );
-  }
-}
-
-class CheckIcon extends StatefulWidget {
-  const CheckIcon({super.key});
-
-  @override
-  State<CheckIcon> createState() => _CheckIconState();
-}
-
-class _CheckIconState extends State<CheckIcon> {
-  bool isChecked = false;
-
-  void _toggle() {
-    isChecked = true;
+    if (!mounted) return;
+    if (proceed != true || !answer.isCorrect) {
+      setState(() => _answering = false);
+      return;
+    }
+    if (finishing) {
+      try {
+        final progress = await GameProgress.completeLevel(widget.levelCode);
+        if (!mounted) return;
+        Navigator.pop(context, progress.cyberCount);
+      } catch (_) {
+        if (!mounted) return;
+        setState(() => _answering = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تعذر حفظ التقدم. حاول مرة أخرى.')),
+        );
+      }
+      return;
+    }
+    setState(() {
+      _correctCount++;
+      _answering = false;
+    });
+    await _loadQuestion();
   }
 
   @override
   Widget build(BuildContext context) {
-    return isChecked
-        ? Icon(
-            Icons.check,
-            color: Colors.greenAccent,
-          )
-        : Icon(Icons.check);
+    final question = _question;
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          'العالم ${widget.levelCode ~/ 100} - مرحلة ${widget.levelCode % 100 ~/ 10} - سؤال ${_correctCount + 1}',
+          style: const TextStyle(fontSize: 18, color: constants.TEXT_COLOR),
+        ),
+        centerTitle: true,
+      ),
+      body: SafeArea(
+        child: Center(
+          child: _loading
+              ? const CircularProgressIndicator()
+              : _loadFailed
+              ? Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('تعذر تحميل السؤال. حاول مرة أخرى.'),
+                    ElevatedButton(
+                      onPressed: _loadQuestion,
+                      child: const Text('إعادة المحاولة'),
+                    ),
+                  ],
+                )
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    children: [
+                      Text(
+                        question!.text,
+                        textAlign: TextAlign.center,
+                        textDirection: TextDirection.rtl,
+                        style: const TextStyle(fontSize: 26),
+                      ),
+                      const SizedBox(height: 28),
+                      Image.asset(
+                        'assets/images/${question.image.image}',
+                        height: 160,
+                        errorBuilder: (context, error, stack) => Column(
+                          children: [
+                            const Text('تعذر عرض الصورة.'),
+                            TextButton(
+                              onPressed: _loadQuestion,
+                              child: const Text('إعادة المحاولة'),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 16,
+                        runSpacing: 12,
+                        children: question.answers
+                            .map(
+                              (answer) => ElevatedButton(
+                                onPressed: _answering
+                                    ? null
+                                    : () => _answer(answer),
+                                style: ElevatedButton.styleFrom(
+                                  minimumSize: const Size(110, 60),
+                                ),
+                                child: Text(
+                                  answer.answer,
+                                  style: const TextStyle(fontSize: 24),
+                                ),
+                              ),
+                            )
+                            .toList(),
+                      ),
+                      const SizedBox(height: 28),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: List.generate(
+                          5,
+                          (index) => Column(
+                            children: [
+                              Text('${index + 1}'),
+                              Icon(
+                                index < _correctCount
+                                    ? Icons.check_circle
+                                    : Icons.radio_button_unchecked,
+                                color: index < _correctCount
+                                    ? Colors.green
+                                    : Colors.grey,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+        ),
+      ),
+    );
   }
 }

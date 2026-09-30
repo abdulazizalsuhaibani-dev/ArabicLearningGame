@@ -1,123 +1,100 @@
-import 'package:arabic_learning_game/views/worlds_view.dart';
 import 'package:flutter/material.dart';
+import 'package:arabic_learning_game/views/worlds_view.dart';
+import 'package:arabic_learning_game/classes/answers_generator.dart';
 import 'package:arabic_learning_game/views/settings_dialog.dart';
-import 'package:arabic_learning_game/main.dart';
-import 'package:arabic_learning_game/classes/constants.dart' as Constants;
+import 'package:arabic_learning_game/classes/constants.dart' as constants;
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final Future<CaptchaImage> Function()? loadImage;
+  const MyApp({super.key, this.loadImage});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     final baseTheme = ThemeData(
-      // The UI was designed for Material 2 (colored app bars, filled buttons).
       useMaterial3: false,
       fontFamily: 'NotoKufi',
-      primarySwatch: Constants.primary,
-      scaffoldBackgroundColor: Constants.FORTH_COLOR,
-      dialogTheme: const DialogThemeData(backgroundColor: Constants.THIRD_COLOR),
+      primarySwatch: constants.primary,
+      scaffoldBackgroundColor: constants.FORTH_COLOR,
+      dialogTheme: const DialogThemeData(
+        backgroundColor: constants.THIRD_COLOR,
+      ),
     );
     return MaterialApp(
-      title: 'Flutter Demo',
-      // Derive the text theme from the M2 base, not Theme.of(context): above
-      // MaterialApp that is the fallback theme, whose M3 line heights squeeze
-      // the Arabic glyphs.
+      title: 'تعلم العربية',
+      // Keep Material 2 typography: M3 fixed line heights squeeze Arabic glyphs.
       theme: baseTheme.copyWith(
-        textTheme: baseTheme.textTheme
-            .apply(bodyColor: Colors.black87, displayColor: Colors.black87),
+        textTheme: baseTheme.textTheme.apply(
+          bodyColor: Colors.black87,
+          displayColor: Colors.black87,
+        ),
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      builder: (context, child) =>
+          Directionality(textDirection: TextDirection.rtl, child: child!),
+      home: MyHomePage(title: 'تعلم العربية', loadImage: loadImage),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
+class MyHomePage extends StatelessWidget {
   final String title;
+  final Future<CaptchaImage> Function()? loadImage;
+  const MyHomePage({super.key, required this.title, this.loadImage});
 
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
   @override
   Widget build(BuildContext context) {
-    final ButtonStyle buttonStyle = ElevatedButton.styleFrom(
-        backgroundColor: Constants.SECOND_COLOR,
-        textStyle: const TextStyle(fontSize: 40, color: Constants.FORTH_COLOR),
-        fixedSize: Size(224, 77));
-    void _openSettingsDialog() {
-      Navigator.of(context).push(MaterialPageRoute<Null>(
-          builder: (BuildContext context) {
-            return SettingsDialog();
-          },
-          fullscreenDialog: true));
-    }
-
+    final buttonStyle = ElevatedButton.styleFrom(
+      backgroundColor: constants.SECOND_COLOR,
+      foregroundColor: Colors.black87,
+      textStyle: const TextStyle(fontSize: 32),
+      minimumSize: const Size(224, 77),
+    );
     return Scaffold(
       body: SafeArea(
         child: Center(
-          child: Container(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: <Widget>[
-                Flexible(
-                  flex: 10,
-                  child: ElevatedButton(
-                    style: buttonStyle,
-                    onPressed: () async {
-                      await databaseService.getImageInfo(5);
-                      Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (context) => const WorldsView()));
-                    },
-                    child: const Text(
-                      'ابدأ',
-                      style: TextStyle(
-                          color: Constants.TEXT_COLOR, fontFamily: 'Notokufi'),
-                    ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              ElevatedButton(
+                style: buttonStyle,
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => WorldsView(loadImage: loadImage),
                   ),
                 ),
-                Flexible(
-                  flex: 5,
-                  child: ElevatedButton(
-                    style: buttonStyle,
-                    onPressed: () {
-                      _openSettingsDialog();
-                    },
-                    child: const Text(
-                      'خيارات',
-                      style: TextStyle(
-                          color: Constants.TEXT_COLOR, fontFamily: 'Notokufi'),
-                    ),
+                child: const Text('ابدأ'),
+              ),
+              ElevatedButton(
+                style: buttonStyle,
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const SettingsDialog(),
+                    fullscreenDialog: true,
                   ),
                 ),
-                Flexible(
-                  flex: 10,
-                  child: ElevatedButton(
-                    style: buttonStyle,
-                    onPressed: () {},
-                    child: const Text(
-                      'عن اللعبة',
-                      style: TextStyle(
-                          color: Constants.TEXT_COLOR, fontFamily: 'Notokufi'),
+                child: const Text('خيارات'),
+              ),
+              ElevatedButton(
+                style: buttonStyle,
+                onPressed: () => showDialog<void>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('عن اللعبة'),
+                    content: const Text(
+                      'تعلم الأحرف العربية من خلال صور الكلمات. أجب عن خمس أسئلة بشكل صحيح لفتح المرحلة التالية، واحصل على نصيحة للأمان على الإنترنت. تتضمن اللعبة ثلاثة عوالم وتسع مراحل.',
                     ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('إغلاق'),
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
+                child: const Text('عن اللعبة'),
+              ),
+            ],
           ),
         ),
       ),
