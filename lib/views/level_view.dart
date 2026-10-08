@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:arabic_learning_game/classes/answers_generator.dart';
 import 'package:arabic_learning_game/classes/level_config.dart';
 import 'dart:math';
-import 'package:flutter/scheduler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:arabic_learning_game/classes/constants.dart' as Constants;
 
@@ -11,7 +10,13 @@ import 'package:arabic_learning_game/classes/constants.dart' as Constants;
 class LevelView extends StatefulWidget {
   final int world;
   final int level;
-  const LevelView({super.key, required this.world, required this.level});
+  // Loads the image for each question; tests pass a fake instead of the DB.
+  final Future<CaptchaImage> Function() loadImage;
+  const LevelView(
+      {super.key,
+      required this.world,
+      required this.level,
+      this.loadImage = CaptchaImage.random});
 
   @override
   State<LevelView> createState() => _LevelViewState();
@@ -23,6 +28,8 @@ class _LevelViewState extends State<LevelView> {
   late int leveltype;
   bool get isMcq => mcqQuestionTypes.contains(leveltype);
   String? randChar;
+  // The current question's image and answers, loaded once per question.
+  late Future<(CaptchaImage, List<Answer>)> _question;
   int worldCount = 0, numberOffails = 0, cyberCount = 0;
   final String question1 = 'كم عدد النقاط في الصورة؟';
   final String question2 = 'هل توجد اي نقطة بالصورة؟'; //
@@ -50,20 +57,18 @@ class _LevelViewState extends State<LevelView> {
   void initState() {
     super.initState();
     leveltype = pickQuestionType(widget.world, widget.level);
+    _loadQuestion();
     _loadWorldCount();
     _loadCyberCount();
-    print(worldCount);
-    SchedulerBinding.instance.addPostFrameCallback((_) async {
-      await _loadData();
-      setState(() {});
-    });
   }
 
-  _loadData() {
-    CaptchaImage imageEntry = CaptchaImage();
-    Future<List<Answer>> answers = isMcq
-        ? setPossibleMultipleChoicesAnswers()
-        : setPossibleTrueFalseAnswers();
+  void _loadQuestion() {
+    _question = widget.loadImage().then((image) => (
+          image,
+          isMcq
+              ? setPossibleMultipleChoicesAnswers(image)
+              : setPossibleTrueFalseAnswers(image)
+        ));
   }
 
   void _loadWorldCount() async {
@@ -144,8 +149,8 @@ class _LevelViewState extends State<LevelView> {
               onPressed: () {
                 questionCount++;
                 leveltype = pickQuestionType(widget.world, widget.level);
+                _loadQuestion();
                 checkIcons.add(CheckIcon());
-                print(questionCount);
                 setState(() {});
                 Navigator.of(context).pop();
               },
@@ -212,107 +217,95 @@ class _LevelViewState extends State<LevelView> {
   }
 
   Widget decideQuestionType() {
-    return isMcq
-        ? FutureBuilder(
-            future: setPossibleMultipleChoicesAnswers(),
-            builder:
-                (BuildContext context, AsyncSnapshot<List<Answer>> snapshot) {
-              if (snapshot.hasData) {
-                // data is available, display it
-                return Column(
+    return FutureBuilder(
+        future: _question,
+        builder: (BuildContext context,
+            AsyncSnapshot<(CaptchaImage, List<Answer>)> snapshot) {
+          if (snapshot.connectionState == ConnectionState.done &&
+              snapshot.hasData) {
+            // data is available, display it
+            final answers = snapshot.data!.$2;
+            if (isMcq) {
+              return Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      Flexible(
+                          child: ElevatedButton(
+                        child: Text('${answers[0].answer}'),
+                        onPressed: () {
+                          showDialogs(answers[0].isCorrect);
+                        },
+                      )),
+                      Flexible(
+                          child: ElevatedButton(
+                        child: Text('${answers[1].answer}'),
+                        onPressed: () {
+                          showDialogs(answers[1].isCorrect);
+                        },
+                      ))
+                    ],
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      Flexible(
+                          child: ElevatedButton(
+                        child: Text('${answers[2].answer}'),
+                        onPressed: () {
+                          showDialogs(answers[2].isCorrect);
+                        },
+                      )),
+                      Flexible(
+                          child: ElevatedButton(
+                        child: Text('${answers[3].answer}'),
+                        onPressed: () {
+                          showDialogs(answers[3].isCorrect);
+                        },
+                      ))
+                    ],
+                  )
+                ],
+              );
+            }
+            return Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        Flexible(
-                            child: ElevatedButton(
-                          child: Text('${snapshot.data![0].answer}'),
-                          onPressed: () {
-                            showDialogs(snapshot.data![0].isCorrect);
-                          },
-                        )),
-                        Flexible(
-                            child: ElevatedButton(
-                          child: Text('${snapshot.data![1].answer}'),
-                          onPressed: () {
-                            showDialogs(snapshot.data![1].isCorrect);
-                          },
-                        ))
-                      ],
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        Flexible(
-                            child: ElevatedButton(
-                          child: Text('${snapshot.data![2].answer}'),
-                          onPressed: () {
-                            showDialogs(snapshot.data![2].isCorrect);
-                          },
-                        )),
-                        Flexible(
-                            child: ElevatedButton(
-                          child: Text('${snapshot.data![3].answer}'),
-                          onPressed: () {
-                            showDialogs(snapshot.data![3].isCorrect);
-                          },
-                        ))
-                      ],
-                    )
+                    Flexible(
+                        child: ElevatedButton(
+                      child: Text(
+                        '${answers[0].answer}',
+                        style: TextStyle(color: Constants.TEXT_COLOR),
+                      ),
+                      onPressed: () {
+                        showDialogs(answers[0].isCorrect);
+                      },
+                    )),
+                    Flexible(
+                        child: ElevatedButton(
+                      child: Text(
+                        '${answers[1].answer}',
+                        style: TextStyle(color: Constants.TEXT_COLOR),
+                      ),
+                      onPressed: () {
+                        showDialogs(answers[1].isCorrect);
+                      },
+                    ))
                   ],
-                );
-              } else if (snapshot.hasError) {
-                // an error occurred while fetching the data, display an error message
-                return Text('Error: ${snapshot.error}');
-              } else {
-                // data is not yet available, display a loading indicator
-                return CircularProgressIndicator();
-              }
-            })
-        : // build true and false answers
-        FutureBuilder(
-            future: setPossibleTrueFalseAnswers(),
-            builder:
-                (BuildContext context, AsyncSnapshot<List<Answer>> snapshot) {
-              if (snapshot.hasData) {
-                // data is available, display it
-                return Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        Flexible(
-                            child: ElevatedButton(
-                          child: Text(
-                            '${snapshot.data![0].answer}',
-                            style: TextStyle(color: Constants.TEXT_COLOR),
-                          ),
-                          onPressed: () {
-                            showDialogs(snapshot.data![0].isCorrect);
-                          },
-                        )),
-                        Flexible(
-                            child: ElevatedButton(
-                          child: Text(
-                            '${snapshot.data![1].answer}',
-                            style: TextStyle(color: Constants.TEXT_COLOR),
-                          ),
-                          onPressed: () {
-                            showDialogs(snapshot.data![1].isCorrect);
-                          },
-                        ))
-                      ],
-                    ),
-                  ],
-                );
-              } else if (snapshot.hasError) {
-                // an error occurred while fetching the data, display an error message
-                return Text('Error: ${snapshot.error}');
-              } else {
-                // data is not yet available, display a loading indicator
-                return CircularProgressIndicator();
-              }
-            });
+                ),
+              ],
+            );
+          } else if (snapshot.hasError) {
+            // an error occurred while fetching the data, display an error message
+            return Text('Error: ${snapshot.error}');
+          } else {
+            // data is not yet available, display a loading indicator
+            return CircularProgressIndicator();
+          }
+        });
   }
 
   String getQuestion() {
@@ -373,25 +366,24 @@ class _LevelViewState extends State<LevelView> {
     return arLetters[Random().nextInt(27)];
   }
 
-  Future<List<Answer>> setPossibleMultipleChoicesAnswers() async {
+  List<Answer> setPossibleMultipleChoicesAnswers(CaptchaImage image) {
     String correctAnswer = '';
     int ans2 = 0, ans3 = 0, ans4 = 0;
     List<Answer> possibleAnswers = [];
     switch (leveltype) {
       case 1:
-        correctAnswer = await CaptchaImage.getNumberOfPoints();
+        correctAnswer = '${image.numberOfPoints}';
         break;
       case 3:
-        correctAnswer = await CaptchaImage.getWord();
-        correctAnswer = correctAnswer.length.toString();
+        correctAnswer = image.word.length.toString();
         break;
       case 5:
-        String word = await CaptchaImage.getWord();
+        String word = image.word;
         randChar = word[Random().nextInt(word.length - 1)];
         correctAnswer = word.indexOf(randChar!).toString();
         break;
       case 7:
-        correctAnswer = await CaptchaImage.getNumberOfMdLetters();
+        correctAnswer = '${image.numberOfMdLetters}';
     }
     // convert the correct answer to intger
     int correctAnswerNum = int.parse(correctAnswer);
@@ -430,31 +422,26 @@ class _LevelViewState extends State<LevelView> {
     return possibleAnswers;
   }
 
-  Future<List<Answer>> setPossibleTrueFalseAnswers() async {
-    String answer = '';
+  List<Answer> setPossibleTrueFalseAnswers(CaptchaImage image) {
     bool value = false;
     List<Answer> possibleAnswers = [];
     switch (leveltype) {
       case 2:
-        answer = await CaptchaImage.getNumberOfPoints();
-        value = answer != '0';
+        value = image.numberOfPoints != 0;
         break;
       case 4:
         //correctAnswer = await CaptchaImage.getWord();
         //correctAnswer = correctAnswer.length.toString();
         break;
       case 6:
-        String word = await CaptchaImage.getWord();
         randChar = getRandomCharacter();
-        value = word.contains(randChar!);
+        value = image.word.contains(randChar!);
         break;
       case 8:
-        answer = await CaptchaImage.getNumberOfMdLetters();
-        value = answer != '0';
+        value = image.numberOfMdLetters != 0;
         break;
       case 9:
-        answer = await CaptchaImage.getIsConnected();
-        value = answer != 'منفصلة';
+        value = image.isConnected != 'منفصلة';
     }
     if (value) {
       possibleAnswers.add(Answer('خطأ', false));
@@ -468,10 +455,6 @@ class _LevelViewState extends State<LevelView> {
 
   @override
   Widget build(BuildContext context) {
-    CaptchaImage imageEntry = CaptchaImage();
-    Future<List<Answer>> answers = isMcq
-        ? setPossibleMultipleChoicesAnswers()
-        : setPossibleTrueFalseAnswers();
     final ButtonStyle buttonStyle = ElevatedButton.styleFrom(
         backgroundColor: Color(0xFF40B4B7),
         textStyle: const TextStyle(fontSize: 40),
@@ -497,12 +480,15 @@ class _LevelViewState extends State<LevelView> {
               ),
               Container(
                   child: FutureBuilder(
-                      future: CaptchaImage.getImageData(),
+                      future: _question,
                       builder: (BuildContext context,
-                          AsyncSnapshot<String> snapshot) {
-                        if (snapshot.hasData) {
+                          AsyncSnapshot<(CaptchaImage, List<Answer>)>
+                              snapshot) {
+                        if (snapshot.connectionState == ConnectionState.done &&
+                            snapshot.hasData) {
                           // data is available, display it
-                          return Image.asset('assets/images/${snapshot.data!}');
+                          return Image.asset(
+                              'assets/images/${snapshot.data!.$1.image}');
                         } else if (snapshot.hasError) {
                           // an error occurred while fetching the data, display an error message
                           return Text('Error: ${snapshot.error}');

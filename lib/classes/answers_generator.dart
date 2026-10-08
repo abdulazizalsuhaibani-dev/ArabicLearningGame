@@ -1,61 +1,32 @@
 import 'package:arabic_learning_game/main.dart';
 
+// One row of the `images` table: a CAPTCHA picture and the facts the
+// questions ask about.
 class CaptchaImage {
-  // attributes of Image table
-  static int? _imageId;
-  static String? _image;
-  static int? _numberOfPoints;
-  static int? _numberOfMdLetters;
-  static String? _isConected;
-  static String? _word;
-  static Map<String, dynamic>? imageQuery;
+  final String image;
+  final String word;
+  final int numberOfPoints;
+  final int numberOfMdLetters;
+  final String isConnected;
 
-  CaptchaImage() {
-    setImageQuery();
-    setWord();
-    setNumberOfPoints();
-    setNumberOfMdLetters();
-    setIsConnected();
-  }
-  static Future<void> setImageQuery() async {
-    imageQuery = await databaseService.getRandomImage();
-    // add refreah method
-  }
+  const CaptchaImage({
+    required this.image,
+    required this.word,
+    required this.numberOfPoints,
+    required this.numberOfMdLetters,
+    required this.isConnected,
+  });
 
-  static Future<String> getImageData() async {
-    //imageId = imageQuery['image_id'];
-    _image = imageQuery!['image'];
-    //numberOfPoints = imageQuery['number_of_points'];
-    //numberOfMdLetters = imageQuery['number_of_md_letters'];
-    //isConected = imageQuery['is_connected'];
-    return '$_image';
-  }
+  CaptchaImage.fromRow(Map<String, dynamic> row)
+    : image = row['image'],
+      word = row['word'],
+      numberOfPoints = row['number_of_points'],
+      numberOfMdLetters = row['number_of_md_letters'],
+      isConnected = row['is_connected'];
 
-  static Future<void> setNumberOfPoints() async {
-    _numberOfPoints = imageQuery!['number_of_points'];
-  }
-
-  static Future<String> getNumberOfPoints() async {
-    return '$_numberOfPoints';
-  }
-
-  static Future<String> getWord() async => '$_word';
-
-  static Future<void> setWord() async {
-    _word = imageQuery!['word'];
-  }
-
-  static Future<String> getNumberOfMdLetters() async => '$_numberOfMdLetters';
-
-  static Future<void> setNumberOfMdLetters() async {
-    _numberOfMdLetters = imageQuery!['number_of_md_letters'];
-  }
-
-  static Future<String> getIsConnected() async => '$_isConected';
-
-  static Future<void> setIsConnected() async {
-    _isConected = imageQuery!['is_connected'];
-  }
+  // Loads a random image from the bundled database.
+  static Future<CaptchaImage> random() async =>
+      CaptchaImage.fromRow(await databaseService.getRandomImage());
 }
 
 class Answer {
