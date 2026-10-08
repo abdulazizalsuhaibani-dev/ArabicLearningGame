@@ -17,7 +17,7 @@ flutter test test/widget_test.dart            # run one test file
 flutter test --plain-name "<test name>"       # run a single test by name
 ```
 
-Tests must not touch the global `databaseService` (it is only initialized in `main()`, and sqflite needs a device) — pump `MyApp` from `views/main_menu_view.dart` directly, as `test/widget_test.dart` does. `sqflite` has no web support, so `flutter run -d chrome` won't work; use an Android device/emulator.
+Tests must not touch the global `databaseService` (it is only initialized in `main()`, and sqflite needs a device) — pump `MyApp` from `views/main_menu_view.dart` directly, as `test/widget_test.dart` does, and give `LevelView` a fake `loadImage`, as `test/level_view_test.dart` does. `sqflite` has no web support, so `flutter run -d chrome` won't work; use an Android device/emulator.
 
 ## Architecture
 
@@ -25,7 +25,7 @@ Tests must not touch the global `databaseService` (it is only initialized in `ma
 
 **Data: bundled SQLite (`lib/db_servieces.dart`)** — `db/game_db.db` is shipped as an asset and copied into the app's databases directory on first launch only (if a file already exists it is not replaced, so schema/content changes to the bundled DB won't reach existing installs unless `clearOldDB` is called or the app data is cleared). Tables referenced: `images` (columns `image_id`, `image`, `word`, `number_of_points`, `number_of_md_letters`, `is_connected`) and `selectedImages`. The `image` column is a filename resolved against `assets/images/`.
 
-**CAPTCHA model (`lib/classes/answers_generator.dart`)** — `CaptchaImage` stores everything in **static** fields; constructing it kicks off (without awaiting) a random-row fetch from the DB, and the static getters read whatever row is currently loaded. `Answer` is a simple `(answer, isCorrect)` pair.
+**CAPTCHA model (`lib/classes/answers_generator.dart`)** — `CaptchaImage` is an immutable value holding one `images` row; `CaptchaImage.random()` loads a random row (`ORDER BY RANDOM() LIMIT 1`). `Answer` is a simple `(answer, isCorrect)` pair.
 
 **Progression state (SharedPreferences)** — Two int keys drive the whole game:
 - `worldCount`: encoded as `world * 100 + level`, where level is 10/20/30 (e.g. `110` = world 1, level 1). Default `110`. `LevelView._incrementLevel` adds 10 and, on reaching `x40`, jumps +70 to the next world's first level (`140 → 210`). `WorldsView.LevelButton` decodes it with `~/ 100` and `% 100` to decide locked / current / completed.
@@ -33,7 +33,7 @@ Tests must not touch the global `databaseService` (it is only initialized in `ma
 
 Both are reset by the settings screen (`settings_dialog.dart`). `lib/shared_preferences.dart` (`Helper`) is an unused wrapper; views access SharedPreferences directly.
 
-**Level logic (`lib/views/level_view.dart`)** — Question type is selected by `leveltype` (1–9, currently hard-coded), with `isMcq` choosing between multiple-choice (`setPossibleMultipleChoicesAnswers`, types 1/3/5/7) and true/false (`setPossibleTrueFalseAnswers`, types 2/4/6/8/9) answer generation. Answering 5 questions correctly (`questionCount >= 4`) completes the level.
+**Level logic (`lib/views/level_view.dart`)** — `LevelView` takes `world` and `level` (1–3). Question type is selected by `leveltype` (1–9), picked per question by `pickQuestionType` from the per-level table `levelQuestionTypes` in `lib/classes/level_config.dart`; only types 1/3/7/8 are listed there (2/4/5/6/9 aren't ready — see the comment in that file). `isMcq` (derived from `mcqQuestionTypes`) chooses between multiple-choice (`setPossibleMultipleChoicesAnswers`, types 1/3/5/7) and true/false (`setPossibleTrueFalseAnswers`, types 2/4/6/8/9) answer generation. Each question's image and answers are loaded once into the `_question` future (in `initState` and when moving to the next question) — never in `build()`, or every rebuild would show a different image. `LevelView.loadImage` defaults to `CaptchaImage.random`; tests pass a fake (see `test/level_view_test.dart`). Answering 5 questions correctly (`questionCount >= 4`) completes the level.
 
 **Styling** — Shared colors and `MaterialColor` swatches are in `lib/classes/constants.dart`, imported as `Constants`. The app theme (in `MyApp`) deliberately uses Material 2 (`useMaterial3: false`); its text theme must be derived from that M2 base theme, not `Theme.of(context)`, or M3 line heights leak in and squeeze the Arabic glyphs (covered by a test in `test/widget_test.dart`).
 

@@ -5,7 +5,6 @@ import 'package:sqflite/sqflite.dart';
 import 'package:flutter/services.dart';
 import 'dart:io';
 import 'dart:typed_data';
-import 'dart:math';
 
 class DatabaseService {
   late Database captcha_db;
@@ -74,12 +73,10 @@ class DatabaseService {
   }
 
   Future<Map<String, dynamic>> getRandomImage() async {
-    String imagesQuery = 'select * from images';
+    String imagesQuery = 'select * from images order by random() limit 1';
     List<Map<String, dynamic>> imagesContent =
         await captcha_db.rawQuery(imagesQuery);
-    Map<String, dynamic> imageContent =
-        imagesContent[Random().nextInt(imagesContent.length - 1)];
-    return imageContent;
+    return imagesContent.first;
   }
 
   Future<void> deleteSelectedImages() async {
